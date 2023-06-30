@@ -1,3 +1,4 @@
+use ::rand::thread_rng;
 use snarkvm::prelude::*;
 use tracing::info;
 
@@ -31,6 +32,12 @@ impl<N: Network, C: ConsensusStorage<N>> Executor<N, C> {
     ) -> Result<Response<N>> {
         let authorization = Authorization::new(&requests.into_iter().collect_vec());
         self.vm.process().read().evaluate::<A>(authorization)
+    }
+    
+    pub fn execute_no_fee(&self, authorization: Authorization<N>) -> Result<Transaction<N>>{
+        let rng = &mut thread_rng();
+        let (_response, execution, _metrics) = self.vm.execute_authorization_raw(authorization, Some(self.query.clone()), rng)?;
+        Transaction::from_execution(execution, None)
     }
 
     // pub fn execute(&self, func_request: Request<N>, fee_request: Request<N>) -> Result<Transaction<N>>{

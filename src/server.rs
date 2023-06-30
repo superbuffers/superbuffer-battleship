@@ -11,10 +11,10 @@ use axum::{
     Router,
 };
 use snarkvm::{prelude::*, synthesizer::helpers::memory::ConsensusMemory};
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::{mpsc::{self, Sender}, oneshot};
 use tracing::*;
 
-use crate::{executor::Executor, player::Player, requests::action_from_request, table::ChessTable};
+use crate::{executor::Executor, player::Player, requests::action_from_request, table::ChessTable, generator::{start_generator, ProofRequest}};
 
 pub async fn run<N: Network, A: snarkvm::circuit::Aleo<Network = N>>() {
     let base_url = "http://192.168.200.25:3030";
@@ -65,6 +65,7 @@ pub async fn run_server<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
     executor: Executor<N, ConsensusMemory<N>>,
 ) -> Sender<Player<N>> {
     let (tx, mut rx) = mpsc::channel(1024);
+    let proof_tx = start_generator(executor.clone());
     let mut players = vec![];
     tokio::spawn(async move {
         loop {
@@ -74,8 +75,9 @@ pub async fn run_server<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
                 let executor = executor.clone();
                 let player2 = players.pop().unwrap();
                 let player1 = players.pop().unwrap();
+                let proof_tx = proof_tx.clone();
                 tokio::spawn(async move {
-                        if let Err(err) = start_game::<N, A>(player1, player2, executor).await{
+                        if let Err(err) = start_game::<N, A>(player1, player2, executor, proof_tx).await{
                             error!("game over: {}",err);
                         };
                     }
@@ -87,9 +89,10 @@ pub async fn run_server<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
 }
 
 pub async fn start_game<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
-    mut player1: Player<N>,
-    mut player2: Player<N>,
+    player1: Player<N>,
+    player2: Player<N>,
     executor: Executor<N, ConsensusMemory<N>>,
+    proof_tx: std::sync::mpsc::Sender<ProofRequest<N>>
 ) -> Result<()> {
     info!("Start game {} {}", player1.address(), player2.address());
     let mut ct = ChessTable::new(*player1.address(), *player2.address());
@@ -108,6 +111,26 @@ pub async fn start_game<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
         info!("Response: {:?}", response);
         let action = action_from_request(requests[0].clone())?;
         let status = ct.update_action(action)?;
+        
+        // Receiver transaction once proof is generated and broadcast then notify transacion_id to player
+        let (transaction_tx, transaction_rx) = oneshot::channel::<Transaction<N>>();
+        let authorization = Authorization::new(&requests.into_iter().collect_vec());
+        let _ = proof_tx.send((authorization, transaction_tx));
+        {   
+            let player1 = player1.clone();
+            let player2 = player2.clone();
+            tokio::spawn(async move {
+                if let Ok(transaction) = transaction_rx.await {
+                    // Broadcast 
+                    // Notify 
+                    let result = ureq::post("http://192.168.200.25:3030/testnet3/transaction/broadcast").send_json(&transaction);
+                    println!("Result: {:?}", result);
+                    let _ = player1.notify_tx_id(transaction.id()).await;
+                    let _ = player2.notify_tx_id(transaction.id()).await;
+                }
+            });
+        }
+
         player1
             .notify_status(status.clone(), response.clone())
             .await?;

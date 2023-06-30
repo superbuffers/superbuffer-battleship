@@ -5,3 +5,4 @@ mod requests;
 pub mod server;
 mod table;
 pub mod utils;
+mod generator;
