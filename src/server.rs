@@ -16,9 +16,8 @@ use tracing::*;
 
 use crate::{executor::Executor, player::Player, requests::action_from_request, table::ChessTable, generator::{start_generator, ProofRequest}};
 
-pub async fn run<N: Network, A: snarkvm::circuit::Aleo<Network = N>>() {
-    let base_url = "http://192.168.200.25:3030";
-    let query = Query::from(base_url);
+pub async fn run<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(base: &str) {
+    let query = Query::from(base);
     let storage = ConsensusMemory::open(None).unwrap();
     let executor = Executor::<N, _>::new(storage, query).unwrap();
     let tx = run_server::<N, A>(executor).await;
@@ -27,7 +26,6 @@ pub async fn run<N: Network, A: snarkvm::circuit::Aleo<Network = N>>() {
         .route("/battleship", get(ws_handler))
         .with_state(tx);
 
-    info!("Server start");
     axum::Server::bind(&SocketAddr::from_str("0.0.0.0:3000").unwrap())
         .serve(app.into_make_service())
         .await
@@ -119,11 +117,12 @@ pub async fn start_game<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
         {   
             let player1 = player1.clone();
             let player2 = player2.clone();
+            let executor = executor.clone();
             tokio::spawn(async move {
                 if let Ok(transaction) = transaction_rx.await {
                     // Broadcast 
                     // Notify 
-                    let result = ureq::post("http://192.168.200.25:3030/testnet3/transaction/broadcast").send_json(&transaction);
+                    let result = executor.broadcast(&transaction);
                     println!("Result: {:?}", result);
                     let _ = player1.notify_tx_id(transaction.id()).await;
                     let _ = player2.notify_tx_id(transaction.id()).await;

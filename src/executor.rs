@@ -40,6 +40,17 @@ impl<N: Network, C: ConsensusStorage<N>> Executor<N, C> {
         Transaction::from_execution(execution, None)
     }
 
+    pub fn broadcast(&self, transaction: &Transaction<N>) -> Result<()> {
+        match &self.query {
+            Query::VM(_) => todo!(),
+            Query::REST(url) => {
+                let url = format!("{url}/testnet3/transaction/broadcast");
+                ureq::post(&url).send_json(transaction)?;
+            }
+        }
+        Ok(())
+    }
+
     // pub fn execute(&self, func_request: Request<N>, fee_request: Request<N>) -> Result<Transaction<N>>{
     //     let rng = &mut thread_rng();
     //     let authorization = Authorization::new(&[func_request]);
