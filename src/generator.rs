@@ -1,5 +1,5 @@
 
-use std::sync::mpsc::{Sender, self};
+use std::{sync::mpsc::{Sender, self}, time::Duration, thread::sleep};
 
 use snarkvm::{synthesizer::{Authorization, Transaction, ConsensusStorage}, prelude::Network};
 use tokio::sync::oneshot;
@@ -21,6 +21,7 @@ pub fn start_generator<N: Network, C: ConsensusStorage<N>>(executor: Executor<N,
                     println!("Execute error: {}", err);
                 }
             }
+            sleep(Duration::from_secs(30));
         }
     });
     tx

@@ -123,7 +123,6 @@ pub async fn start_game<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
                     // Broadcast 
                     // Notify 
                     let result = executor.broadcast(&transaction);
-                    sleep(Duration::from_secs(30)).await;
                     println!("Result: {:?}", result);
                     let _ = player1.notify_tx_id(transaction.id()).await;
                     let _ = player2.notify_tx_id(transaction.id()).await;
