@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Result;
 use axum::{
@@ -11,7 +11,7 @@ use axum::{
     Router,
 };
 use snarkvm::{prelude::*, synthesizer::helpers::memory::ConsensusMemory};
-use tokio::sync::{mpsc::{self, Sender}, oneshot};
+use tokio::{sync::{mpsc::{self, Sender}, oneshot}, time::sleep};
 use tracing::*;
 
 use crate::{executor::Executor, player::Player, requests::action_from_request, table::ChessTable, generator::{start_generator, ProofRequest}};
@@ -123,6 +123,7 @@ pub async fn start_game<N: Network, A: snarkvm::circuit::Aleo<Network = N>>(
                     // Broadcast 
                     // Notify 
                     let result = executor.broadcast(&transaction);
+                    sleep(Duration::from_secs(30)).await;
                     println!("Result: {:?}", result);
                     let _ = player1.notify_tx_id(transaction.id()).await;
                     let _ = player2.notify_tx_id(transaction.id()).await;
